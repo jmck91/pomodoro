@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pomodoro" />
+  <title>Pomodoro</title>
+  <style>
+    :root {
+      --red:   #c0392b;
+      --green: #27ae60;
+      --cream: #fdf6ec;
+      --dark:  #1a0a05;
+      --muted: #9b7b6e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--cream);
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Georgia, serif;
+      color: var(--dark);
+    }
+    .app {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      padding: 40px 24px;
+      width: 100%;
+      max-width: 360px;
+    }
+    header { text-align: center; }
+    header h1 {
+      font-size: clamp(2rem, 6vw, 2.6rem);
+      letter-spacing: -0.02em;
+      font-weight: normal;
+      line-height: 1;
+    }
+    header h1 em { font-style: italic; color: var(--red); }
+    .tabs {
+      display: flex;
+      background: rgba(0,0,0,0.06);
+      border-radius: 100px;
+      padding: 4px;
+      gap: 2px;
+    }
+    .tab {
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Courier New', monospace;
+      transition: all 0.2s;
+    }
+    .tab.active { background: var(--dark); color: var(--cream); }
+    .pixel-stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #pixelCanvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    @keyframes stage-pulse {
+      0%,100% { transform: scale(1); }
+      50%      { transform: scale(1.025); }
+    }
+    .pixel-stage.running #pixelCanvas {
+      animation: stage-pulse 3s ease-in-out infinite;
+    }
+    @keyframes stage-bounce {
+      0%   { transform: translateY(0) scale(1); }
+      22%  { transform: translateY(-16px) scale(1.04,.97); }
+      44%  { transform: translateY(0) scale(.97,1.03); }
+      66%  { transform: translateY(-7px) scale(1.02,.98); }
+      88%  { transform: translateY(0) scale(1); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .pixel-stage.done #pixelCanvas {
+      animation: stage-bounce 0.75s ease forwards;
+    }
+    .timer-wrap { text-align: center; }
+    .timer {
+      font-size: clamp(3.8rem, 14vw, 5rem);
+      font-weight: 300;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-family: 'Courier New', monospace;
+      font-variant-numeric: tabular-nums;
+      transition: color 0.4s;
+    }
+    .timer.done { color: var(--red); }
+    .timer-label {
+      margin-top: 8px;
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: 'Courier New', monospace;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 2px;
+      background: rgba(0,0,0,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--red);
+      width: 0%;
+      transition: width 0.5s linear;
+    }
+    .controls { display: flex; gap: 16px; align-items: center; }
+    .btn-main {
+      width: 68px; height: 68px;
+      border-radius: 50%; border: none;
+      background: var(--dark); color: var(--cream);
+      font-size: 1.4rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.15s, background 0.3s;
+      box-shadow: 0 8px 24px rgba(26,10,5,0.16);
+    }
+    .btn-main:active { transform: scale(0.92); }
+    .btn-main.running { background: var(--red); }
+    .btn-secondary {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      background: transparent; color: var(--muted);
+      font-size: 1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .btn-secondary:active { transform: scale(0.9); }
+    .btn-secondary:hover { border-color: var(--dark); color: var(--dark); }
+    .sessions { display: flex; gap: 10px; }
+    .session-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(0,0,0,0.1);
+      transition: background 0.3s, transform 0.3s;
+    }
+    .session-dot.done { background: var(--red); transform: scale(1.25); }
+    .done-banner {
+      position: fixed; top:0; left:0; right:0;
+      padding: 16px;
+      padding-top: calc(16px + env(safe-area-inset-top));
+      background: var(--red); color: white;
+      text-align: center;
+      font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: 'Courier New', monospace;
+      transform: translateY(-100%);
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 100;
+    }
+    .done-banner.show { transform: translateY(0); }
+    .particle-container { position:fixed; inset:0; pointer-events:none; z-index:50; overflow:hidden; }
+    @keyframes pfly {
+      0%   { transform:translate(0,0) scale(1); opacity:1; }
+      100% { transform:translate(var(--dx),var(--dy)) scale(0); opacity:0; }
+    }
+    .p { position:absolute; opacity:0; }
+  </style>
+</head>
+<body>
+
+<div class="done-banner" id="doneBanner">Session complete!</div>
+<div class="particle-container" id="pc"></div>
+
+<div class="app">
+  <header>
+    <h1>Pomo<em>doro</em></h1>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="setMode('work')">Focus</button>
+    <button class="tab" onclick="setMode('short')">Short Break</button>
+    <button class="tab" onclick="setMode('long')">Long Break</button>
+  </div>
+
+  <div class="pixel-stage" id="pixelStage">
+    <canvas id="pixelCanvas"></canvas>
+  </div>
+
+  <div class="timer-wrap">
+    <div class="timer" id="timerDisplay">25:00</div>
+    <div class="timer-label" id="timerLabel">focus session</div>
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-secondary" onclick="resetTimer()">&#8635;</button>
+    <button class="btn-main" id="mainBtn" onclick="toggleTimer()">&#9654;</button>
+    <button class="btn-secondary" onclick="skipTimer()">&#9197;</button>
+  </div>
+
+  <div class="sessions">
+    <div class="session-dot" id="d0"></div>
+    <div class="session-dot" id="d1"></div>
+    <div class="session-dot" id="d2"></div>
+    <div class="session-dot" id="d3"></div>
+  </div>
+</div>
+
+<script>
+var G = [
+  [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,2,1,2,0,0,0,0,0,0,0],
+  [0,0,0,0,0,2,2,1,2,2,0,0,0,0,0,0],
+  [0,0,0,0,0,0,2,2,2,0,0,0,0,0,0,0],
+  [0,0,0,0,3,3,3,3,3,3,3,0,0,0,0,0],
+  [0,0,0,3,3,4,4,3,3,3,3,3,0,0,0,0],
+  [0,0,3,3,4,4,3,3,3,3,3,3,3,0,0,0],
+  [0,0,3,3,3,3,3,3,3,3,3,3,3,0,0,0],
+  [0,0,3,3,3,3,3,3,3,3,3,3,3,0,0,0],
+  [0,0,3,3,3,3,3,3,3,3,3,3,5,0,0,0],
+  [0,0,3,3,3,3,3,3,3,3,3,5,5,0,0,0],
+  [0,0,0,3,3,3,3,3,3,3,3,5,0,0,0,0],
+  [0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,0],
+  [0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,0],
+  [0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+];
+
+var bodyPx = [];
+for (var r = G.length-1; r >= 0; r--)
+  for (var c = 0; c < G[r].length; c++)
+    if (G[r][c] >= 3) bodyPx.push([r,c]);
+var TOTAL = bodyPx.length;
+
+var CELL = 10, SZ = 160;
+var canvas = document.getElementById('pixelCanvas');
+var ctx = canvas.getContext('2d');
+var dpr = window.devicePixelRatio || 1;
+canvas.style.width = SZ+'px'; canvas.style.height = SZ+'px';
+canvas.width = SZ*dpr; canvas.height = SZ*dpr;
+ctx.scale(dpr, dpr);
+
+function draw(pct) {
+  ctx.clearRect(0,0,SZ,SZ);
+  var n = Math.round(pct * TOTAL);
+  var filled = {};
+  for (var i = 0; i < n; i++) filled[bodyPx[i][0]+','+bodyPx[i][1]] = 1;
+  for (var row = 0; row < G.length; row++) {
+    for (var col = 0; col < G[row].length; col++) {
+      var v = G[row][col];
+      if (!v) continue;
+      var color;
+      if (v===1)      color = '#2a6e33';
+      else if (v===2) color = '#38a04e';
+      else if (filled[row+','+col]) {
+        color = v===4 ? '#e05848' : v===5 ? '#7a1510' : '#c0392b';
+      } else {
+        color = v===4 ? '#e2dbd4' : v===5 ? '#c4bcb4' : '#d8d0c8';
+      }
+      ctx.fillStyle = color;
+      ctx.fillRect(col*CELL, row*CELL, CELL-1, CELL-1);
+    }
+  }
+}
+
+var MODES = {
+  work:  {label:'focus session', mins:25},
+  short: {label:'short break',   mins:5 },
+  long:  {label:'long break',    mins:15}
+};
+var mode='work', total=1500, rem=1500, running=false, iv=null, sess=0;
+
+var stage  = document.getElementById('pixelStage');
+var tDisp  = document.getElementById('timerDisplay');
+var tLbl   = document.getElementById('timerLabel');
+var mBtn   = document.getElementById('mainBtn');
+var pFill  = document.getElementById('progressFill');
+var banner = document.getElementById('doneBanner');
+var pc     = document.getElementById('pc');
+
+function setMode(m) {
+  stop(); mode=m; total=MODES[m].mins*60; rem=total;
+  stage.classList.remove('running','done');
+  hideBanner();
+  document.querySelectorAll('.tab').forEach(function(t,i){
+    t.classList.toggle('active',['work','short','long'][i]===m);
+  });
+  render();
+}
+
+function toggleTimer() { running ? stop() : start(); }
+
+function start() {
+  if (rem<=0) { resetTimer(); return; }
+  running=true;
+  stage.classList.add('running'); stage.classList.remove('done');
+  mBtn.innerHTML='&#9646;&#9646;'; mBtn.classList.add('running');
+  iv=setInterval(tick,1000);
+}
+
+function stop() {
+  running=false; clearInterval(iv);
+  mBtn.innerHTML='&#9654;'; mBtn.classList.remove('running');
+  stage.classList.remove('running');
+}
+
+function resetTimer() { stop(); rem=total; stage.classList.remove('done'); hideBanner(); render(); }
+function skipTimer()  { stop(); done(); }
+
+function tick() {
+  rem--;
+  if (rem<=0) { rem=0; render(); stop(); done(); }
+  else render();
+}
+
+function done() {
+  stage.classList.add('done');
+  if (navigator.vibrate) navigator.vibrate([200,100,200]);
+  if (mode==='work') {
+    sess=Math.min(sess+1,4); updateDots(); burst();
+    showBanner('\uD83C\uDF45 Session complete \u2014 take a break!');
+    setTimeout(function(){
+      var nx=sess%4===0?'long':'short';
+      if(sess===4) sess=0;
+      setMode(nx);
+    },2000);
+  } else {
+    showBanner('\uD83C\uDF3F Break over \u2014 back to work!');
+    setTimeout(function(){ setMode('work'); },2000);
+  }
+}
+
+function render() {
+  var m=String(Math.floor(rem/60)).padStart(2,'0');
+  var s=String(rem%60).padStart(2,'0');
+  tDisp.textContent=m+':'+s;
+  tLbl.textContent=MODES[mode].label;
+  tDisp.classList.toggle('done',rem===0);
+  var pct=1-(rem/total);
+  pFill.style.width=(pct*100)+'%';
+  draw(pct);
+}
+
+function updateDots() {
+  for(var i=0;i<4;i++) document.getElementById('d'+i).classList.toggle('done',i<sess);
+}
+
+function showBanner(msg) { banner.innerHTML=msg; banner.classList.add('show'); }
+function hideBanner()    { banner.classList.remove('show'); }
+
+function burst() {
+  var cols=['#c0392b','#e05848','#38a04e','#f39c12','#fdf6ec'];
+  for(var i=0;i<30;i++){
+    var p=document.createElement('div'); p.className='p';
+    var sz=5+Math.random()*10, a=Math.random()*Math.PI*2, d=80+Math.random()*200;
+    p.style.cssText='width:'+sz+'px;height:'+sz+'px;background:'+cols[Math.floor(Math.random()*cols.length)]+
+      ';border-radius:'+(Math.random()>.5?'50%':'2px')+';left:50%;top:45%;'+
+      '--dx:'+(Math.cos(a)*d)+'px;--dy:'+(Math.sin(a)*d)+'px;'+
+      'animation:pfly '+(0.55+Math.random()*.45)+'s ease-out '+(Math.random()*.12)+'s forwards;';
+    pc.appendChild(p);
+    setTimeout(function(el){el.remove();},1300,p);
+  }
+}
+
+render();
+
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.has('done') || params.has('break')) {
+    var isBreak = params.has('break');
+    rem = 0;
+    render();
+    setTimeout(function() {
+      stage.classList.add('done');
+      if (!isBreak) {
+        burst();
+        showBanner('\uD83C\uDF45 Session complete \u2014 take a break!');
+        if (navigator.vibrate) navigator.vibrate([200,100,200]);
+      } else {
+        showBanner('\uD83C\uDF3F Break over \u2014 back to work!');
+        if (navigator.vibrate) navigator.vibrate([100,50,100]);
+      }
+    }, 300);
+  }
+})();
+</script>
+</body>
+</html>
